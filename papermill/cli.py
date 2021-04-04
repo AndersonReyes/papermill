@@ -156,6 +156,11 @@ def print_papermill_version(ctx, param, value):
     is_eager=True,
     help='Flag for displaying the version.',
 )
+@click.option(
+    '--docker-image',
+    default="",
+    help="Docker image to use if using DockerEngine"
+)
 def papermill(
     click_ctx,
     notebook_path,
@@ -184,6 +189,7 @@ def papermill(
     report_mode,
     stdout_file,
     stderr_file,
+    docker_image
 ):
     """This utility executes a single notebook in a subprocess.
 
@@ -265,6 +271,7 @@ def papermill(
             report_mode=report_mode,
             cwd=cwd,
             execution_timeout=execution_timeout,
+            docker_image=docker_image
         )
     except nbclient.exceptions.DeadKernelError:
         # Exiting with a special exit code for dead kernels

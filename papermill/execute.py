@@ -81,50 +81,66 @@ def execute_notebook(
     input_path = parameterize_path(input_path, path_parameters)
     output_path = parameterize_path(output_path, path_parameters)
 
-    logger.info("Input Notebook:  %s" % get_pretty_path(input_path))
-    logger.info("Output Notebook: %s" % get_pretty_path(output_path))
-    with local_file_io_cwd():
-        if cwd is not None:
-            logger.info("Working directory: {}".format(get_pretty_path(cwd)))
+    if engine_name == "docker":
+        papermill_engines.execute_notebook_with_engine(
+            engine_name,
+            None,
+            input_path=input_path,
+            output_path=output_path if request_save_on_cell_execute else None,
+            kernel_name=kernel_name,
+            progress_bar=progress_bar,
+            log_output=log_output,
+            start_timeout=start_timeout,
+            stdout_file=stdout_file,
+            stderr_file=stderr_file,
+            **engine_kwargs
+        )
+    else:
+        logger.info("Input Notebook:  %s" % get_pretty_path(input_path))
+        logger.info("Output Notebook: %s" % get_pretty_path(output_path))
 
-        nb = load_notebook_node(input_path)
+        with local_file_io_cwd():
+            if cwd is not None:
+                logger.info("Working directory: {}".format(get_pretty_path(cwd)))
 
-        # Parameterize the Notebook.
-        if parameters:
-            nb = parameterize_notebook(
-                nb, parameters, report_mode, kernel_name=kernel_name, language=language
-            )
+            nb = load_notebook_node(input_path)
 
-        nb = prepare_notebook_metadata(nb, input_path, output_path, report_mode)
-        # clear out any existing error markers from previous papermill runs
-        nb = remove_error_markers(nb)
-
-        if not prepare_only:
-            # Fetch out the name from the notebook document
-            kernel_name = nb_kernel_name(nb, kernel_name)
-            # Execute the Notebook in `cwd` if it is set
-            with chdir(cwd):
-                nb = papermill_engines.execute_notebook_with_engine(
-                    engine_name,
-                    nb,
-                    input_path=input_path,
-                    output_path=output_path if request_save_on_cell_execute else None,
-                    kernel_name=kernel_name,
-                    progress_bar=progress_bar,
-                    log_output=log_output,
-                    start_timeout=start_timeout,
-                    stdout_file=stdout_file,
-                    stderr_file=stderr_file,
-                    **engine_kwargs
+            # Parameterize the Notebook.
+            if parameters:
+                nb = parameterize_notebook(
+                    nb, parameters, report_mode, kernel_name=kernel_name, language=language
                 )
 
-            # Check for errors first (it saves on error before raising)
-            raise_for_execution_errors(nb, output_path)
+            nb = prepare_notebook_metadata(nb, input_path, output_path, report_mode)
+            # clear out any existing error markers from previous papermill runs
+            nb = remove_error_markers(nb)
 
-        # Write final output in case the engine didn't write it on cell completion.
-        write_ipynb(nb, output_path)
+            if not prepare_only:
+                # Fetch out the name from the notebook document
+                kernel_name = nb_kernel_name(nb, kernel_name)
+                # Execute the Notebook in `cwd` if it is set
+                with chdir(cwd):
+                    nb = papermill_engines.execute_notebook_with_engine(
+                        engine_name,
+                        nb,
+                        input_path=input_path,
+                        output_path=output_path if request_save_on_cell_execute else None,
+                        kernel_name=kernel_name,
+                        progress_bar=progress_bar,
+                        log_output=log_output,
+                        start_timeout=start_timeout,
+                        stdout_file=stdout_file,
+                        stderr_file=stderr_file,
+                        **engine_kwargs
+                    )
 
-        return nb
+                # Check for errors first (it saves on error before raising)
+                raise_for_execution_errors(nb, output_path)
+
+            # Write final output in case the engine didn't write it on cell completion.
+            write_ipynb(nb, output_path)
+
+            return nb
 
 
 def prepare_notebook_metadata(nb, input_path, output_path, report_mode=False):

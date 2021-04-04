@@ -402,8 +402,69 @@ class NBClientEngine(Engine):
         return PapermillNotebookClient(nb_man, **final_kwargs).execute()
 
 
+class DockerEngine(Engine):
+    @classmethod
+    def execute_notebook(
+        cls,
+        nb,
+        kernel_name,
+        **kwargs
+    ):
+        """
+        A wrapper to handle notebook execution tasks.
+
+        Wraps the notebook object in a `NotebookExecutionManager` in order to track
+        execution state in a uniform manner. This is meant to help simplify
+        engine implementations. This allows a developer to just focus on
+        iterating and executing the cell contents.
+        """
+        cls.execute_managed_notebook(
+            kernel_name=kernel_name,
+            **kwargs
+        )
+
+    @classmethod
+    def execute_managed_notebook(
+        cls,
+        kernel_name,
+        **kwargs
+    ):
+        import docker
+
+        client = docker.from_env()
+
+        input_path = kwargs["input_path"]
+        output_path = kwargs["output_path"]
+        docker_image = kwargs["docker_image"]
+        progress_bar = kwargs.get("progress_bar", True)
+        cmd = [
+            "papermill",
+            input_path,
+            output_path,
+            "--kernel",
+            kernel_name,
+        ]
+
+        if progress_bar:
+            cmd.append("--progress-bar")
+
+        cmd = " ".join(cmd)
+        logger.info("Docker Command: [{}] in image {}\n".format(cmd, docker_image))
+
+        container = client.containers.run(docker_image, cmd, auto_remove=True, detach=True)
+        for log in container.logs(stream=True):
+            log = log.decode("utf-8").strip()
+            logger.info(log)
+
+        exitcode = container.wait()["StatusCode"]
+        if exitcode != 0:
+            print("\n")
+            raise PapermillException("Container finished with exit code {}".format(exitcode))
+
+
 # Instantiate a PapermillEngines instance, register Handlers and entrypoints
 papermill_engines = PapermillEngines()
 papermill_engines.register(None, NBClientEngine)
 papermill_engines.register('nbclient', NBClientEngine)
+papermill_engines.register('docker', DockerEngine)
 papermill_engines.register_entry_points()
